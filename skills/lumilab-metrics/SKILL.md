@@ -3,7 +3,7 @@ name: lumilab-metrics
 description: |
   AARRR Pirate Metrics + Sean Ellis North Star + leading vs lagging + Amplitude/PostHog event schema. Cohort retention curve reading. Lumi-Lab overlay with Chinese-first event naming and Anti-Slop for vanity metrics. Use when the user asks which metrics to track, can't tell if a product is healthy from GA data, needs an event schema before MVP launch, or wants to read a cohort retention curve.
   关键词：metrics / AARRR / 海盗指标 / north star / leading / lagging / vanity / retention curve / event schema / PostHog / Amplitude
-version: 1.6.0
+version: 1.7.0
 metadata:
   hermes:
     tags: [aarrr, north-star, retention, amplitude, posthog]
@@ -138,7 +138,20 @@ Leading (因)：activation rate, week-1 actions, time to aha
 7. Server-side 优于 client-side（ad blocker 干扰小）
 ```
 
-### 6. Cohort Retention Curve（读图）
+### 6. R6 信号基线（assets/baselines.yaml）
+
+对照基线判强弱时查 `assets/baselines.yaml`（与 lumilab-next-actions 共用），三条约定：
+
+```
+1. 每条基线带置信层 tier：A=一手实测 / B=行业公开数据 / C=国内经验值。
+   C 层引用必附「经验基线，以自测为准」。
+2. 小红书信号折算（C 层）：收藏权重 > 点赞；「求链接」类评论 ≈ cta_click；
+   私信问价 ≈ lead（按 contact_submit 一级计）。
+3. 事件阶梯（强度递增）：page_view < cta_click < price_intent < contact_submit < payment_test。
+   既有埋点命名不同（如 email_capture）不强改，按 baselines.yaml 的 event_ladder.mapping 归级。
+```
+
+### 7. Cohort Retention Curve（读图）
 
 ```
 % retained
@@ -490,6 +503,7 @@ metrics.yaml 是累积的事件 schema，schema 版本化。跑得越久，事�
 
 ## Changelog
 
+- **1.7.0** — `assets/baselines.yaml` 补 C 层条目 `note:「经验基线，以自测为准」`；新增小红书信号折算约定（收藏>点赞、「求链接」评论≈cta_click、私信问价≈lead，C 层）与事件阶梯 `event_ladder`（page_view < cta_click < price_intent < contact_submit < payment_test，既有命名走 mapping 不强改）；SKILL.md 方法论核心加「R6 信号基线」节对齐。
 - **1.0.0-rc1** — 加 `## Changelog` / `scripts/package.json` / `校验字段:` 显式 schema 声明；Dependencies 表补单次调用成本列。
 - **0.3.0** — `validate-output.ts` 加 event 命名 verb_noun snake_case 检查 + 事件数 ≤ 20 上限；`anti-slop-lint.ts` 扫 vanity metric 词。
 - **0.2.0** — 补 leading vs lagging 配对规范、cohort retention 4 周才解读约束、`## 分支决策` if-then 表。

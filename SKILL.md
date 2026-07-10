@@ -3,7 +3,7 @@ name: lumilab
 description: |
   Lumi Lab —— C 端创业 idea 的快速验证 skills bundle。给一句话 idea，自动跑市场分析 / 竞品扫描 / 人群拆解 / 关键词红蓝海，产出一份图文并茂的网页版分析报告 + 几个具体方向建议，用户选定方向后再自动生成一个能测真实购买意愿的 fake-door 验证页（带 SEO/GEO + 转化追踪），可一键加密部署上线。全程最多问用户 2 次。26 个 skill 协同，跑在 Claude Code / OpenClaw / Cursor / Codex / Hermes / Gemini CLI 里——宿主提供 LLM，bundle 不需要 LLM API key。
   关键词：创业 idea 验证 / 一句话想法 / 市场分析 / 竞品分析 / 人群拆解 / 关键词调研 / 红蓝海 / landing page / fake-door 验证页 / SEO / GEO / 购买意愿 / 轻量验证 / skills bundle / OPC / 独立开发者
-version: 1.14.0
+version: 1.15.0
 license: AGPL-3.0-or-later
 homepage: https://github.com/zifeixu85/lumilab
 platforms: [macos, linux]
@@ -56,7 +56,7 @@ bun run scripts/lumilab idea "<一句话想法>"    # 或直接用 bundle 里的
 
 ```
 你：一句话 idea
- ↓  （最多问你一次可选补充，能跳过就跳过）
+ ↓  （对焦问答：4-5 个关键问题，说「快速模式」可跳过）
 自动：市场分析 + 竞品扫描 + 人群拆解 + 关键词红蓝海
  ↓
 产物①：图文并茂的网页版分析报告 + 3-5 个具体方向建议
@@ -78,7 +78,7 @@ lumilab idea "你的一句话想法"
 
 或在 AI 宿主里直接说：**用 lumilab-idea-to-landing 帮我跑这个 idea**。
 
-宿主 LLM 会按 `lumilab-idea-to-landing` 这个 orchestrator skill 的 EXECUTION CONTRACT 自动跑完整条流水线，全程最多打扰你 2 次（一次可选补充 + 一次方向选择），中间产物都是 HTML 主动推给你看。
+宿主 LLM 会按 `lumilab-idea-to-landing` 这个 orchestrator skill 的 EXECUTION CONTRACT 自动跑完整条流水线，全程最多打扰你 2 次——两道决策门：**对焦问答**（研究开始前，4-5 个关键问题）+ **方向选择**（研究报告出来后，3-4 个候选方向选一个）。说「快速模式」可以都跳过，此时自动采用推荐方向并在 decisions.yaml 留痕。中间产物都是 HTML 主动推给你看。
 
 ## 26 个 skill 怎么协同
 
@@ -94,6 +94,12 @@ lumilab idea "你的一句话想法"
 `idea-to-landing` 是编排者；它在 Phase 1 自动调用 research-platforms（定性痛点）+ research-competitor + research-icp + research-keywords（定量搜索需求），Phase 2 调 studio 渲染分析报告，Phase 4 调 design-direction + landing-mvp + copy 生成验证页。其余 skill 在对话中按需调用。
 
 每个 skill 是 `skills/<name>/SKILL.md` + 可选的 `scripts/`（含 `validate-output.ts` 输出校验 + `anti-slop-lint.ts` 文案检查）。共 26 个 skill。
+
+## 设计红线（对所有 skill 生效，宿主 agent 必须遵守）
+
+1. **契约只管数据层，不碰表现层。** 结构化契约（schema、落盘路径、证据要求）约束「写什么字段、留什么证据」；页面长什么样、报告怎么排版，由 AI 按 venture 的 design_direction 自由设计，anti-slop lint 守底线。不用固定模板锁住设计。
+2. **规则是「留痕放行」，不是「FAIL 阻塞」。** 任何质量规则都允许显式偏离，但必须在 `decisions.yaml` 留一笔（时间、原因、改成什么）。禁止的是静默偏离，不是偏离本身。
+3. **结论必须有证据。** 有 API key 就真调并把原始响应落盘 `research/raw/`；没有 key 走宿主代搜且 ingest 拒绝空数据。两条路都不允许「像是查过了」的无证据结论。
 
 ## 安装
 

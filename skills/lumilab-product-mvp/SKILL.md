@@ -3,7 +3,7 @@ name: lumilab-product-mvp
 description: |
   MVP = riskiest-assumption test, not minimum viable feature. Marty Cagan + Eric Ries lineage. Concierge / Wizard-of-Oz / fake door / smoke test / explainer video patterns. Lumi-Lab Chinese overlay with platform-aware fake-door scripts. Use when the user says they are about to write code / build an MVP, lists 10+ features for v1, or asks how to design a concierge or fake-door test.
   关键词：MVP / riskiest assumption / 最小可行产品 / 最高风险假设 / concierge / Wizard of Oz / fake door / smoke test / explainer video / 假门测试 / 烟雾测试
-version: 1.5.0
+version: 1.6.0
 metadata:
   hermes:
     tags: [mvp, marty-cagan, riskiest-assumption, concierge, wizard-of-oz]
@@ -25,6 +25,9 @@ metadata:
     - "data/ventures/<name>/mvp_plan.md"
     - "data/ventures/<name>/riskiest_assumptions.yaml"
     - "data/ventures/<name>/mvp_test_<id>.md"
+    - "data/ventures/<name>/research/personas.json"
+    - "data/ventures/<name>/research/experience_map.json"
+    - "data/ventures/<name>/research/bmc.json"
   reads:
     - "data/ventures/<name>/hypotheses.yaml"
     - "data/ventures/<name>/audience.md"
@@ -59,10 +62,37 @@ compatibility: "Claude Code, OpenClaw 2026.4.25+, Hermes Agent v0.13.0+, Cursor,
 ## 工作流程与用法
 
 1. 列出所有假设 → 标出**最高风险**那个（错了就全错的）。
-2. 选最轻的测试形态去测它（优先 concierge / fake door，不写代码）。
-3. 定通过阈值 → 跑 → 喂 hypothesis-ledger / metrics。
+2. 落「方案层三件套」（personas → experience_map → bmc，见下节），再写 mvp_plan。
+3. 选最轻的测试形态去测它（优先 concierge / fake door，不写代码）。
+4. 定通过阈值 → 跑 → 喂 hypothesis-ledger / metrics。
 
 示例：「给宠物主的健康记录 app」最高风险假设不是「能不能做」，是「主人愿不愿持续记录」→ 先用一个 fake-door 落地页测留资，而非先写 app。
+
+## 方案层三件套（结构化产物契约）
+
+识别出最高风险假设之后、写 `mvp_plan.md` 之前，先落三份结构化产物到 `data/ventures/<slug>/research/`。**顺序契约**：riskiest_assumptions → personas → experience_map → bmc → mvp_plan，前一步没落盘不进下一步。
+
+三件套是**数据契约**——只管字段与证据合规；呈现方式（卡片/地图/画布怎么画）由 Studio 自由渲染，本 skill 不规定视觉形态。
+
+### 1 · `personas.json` — 证据画像（2-3 个）
+
+每条画像：`{id, name(化名), profile(年龄/职业/场景一句话), goals[], pains[], evidence[]}`。
+
+- **`evidence` ≥ 3 条，且每条必须指向具体证据文件路径**（如 `research/raw/tikhub/xxx.json`、访谈记录路径）——这是「证据画像」区别于「AI 编画像」的关键。
+- 产物头部写明数据方法论：数据来自哪、怎么采、样本量。
+- 证据不足 3 条时如实标 `evidence_status: "insufficient"`，**不编造**。
+
+### 2 · `experience_map.json` — 用户体验地图
+
+认知 → 比较 → 试用 → 付费 四阶段，每阶段：`{stage, behaviors[], thoughts[], pains[], mood(1-5 整数), opportunities[]}`。
+
+- 每个 opportunity 必须挂 `hypothesis_id`（对应 `hypotheses.yaml` 里的假设）——没有假设承接的机会点不写。
+
+### 3 · `bmc.json` — 商业模式画布九格
+
+九格：`key_partners / key_activities / key_resources / value_propositions / customer_relationships / channels / customer_segments / cost_structure / revenue_streams`。
+
+- `revenue_streams` 每条带 `validation_status: 未验证 | 验证中 | 已支持 | 已推翻`——收入假设默认「未验证」，只有真实信号（付款/留资）才能升级。
 
 ## 输出
 
@@ -98,4 +128,5 @@ MVP = fake-door 落地页测留资  ❌ 先写 app
 
 ## Changelog
 
+- 1.6.0：加「方案层三件套」数据契约（personas / experience_map / bmc，落 `research/`），顺序契约 riskiest_assumptions → 三件套 → mvp_plan；evidence ≥ 3 条且指向证据文件路径，不足如实标 insufficient。
 - 1.5.0：精简至 ≤6000 字、补齐 rubric 维度，强化「riskiest assumption」与国内 fake-door 差异化。

@@ -1,9 +1,9 @@
 ---
 name: lumilab-idea-to-landing
 description: |
-  One-sentence idea → autonomous market analysis → direction proposals → a fake-door validation landing page that measures real purchase intent. The default Lumi Lab entry point for validating C-end startup ideas. An autoplan-style orchestrator: it runs the whole pipeline autonomously, asks the user AT MOST twice (one optional intake, one direction-pick gate), and delivers visual HTML artifacts the user actually sees — not silent .md files. Phase 0 intake 提供可选的「先用 coach-yc 教练梳理一轮」岔路（opt-in，梳理完接回本流水线调研）。Use when the user gives a startup idea, says "我有个 idea / 帮我看看这个想法 / 验证一下 / 做个 landing", or wants to go from idea to a testable landing page fast —— 这是从 idea 一路到 landing 的默认入口（含可选教练澄清）。
+  One-sentence idea → autonomous market analysis → direction proposals → a fake-door validation landing page that measures real purchase intent. The default Lumi Lab entry point for validating C-end startup ideas. An autoplan-style orchestrator: it runs the whole pipeline autonomously, asks the user AT MOST twice — two decision gates (clarify gate after intake, direction-pick gate after analysis; fast mode skips the waiting but never the quality gates, every skip logged in decisions.yaml) — and delivers visual HTML artifacts the user actually sees — not silent .md files. Phase 0 intake 提供可选的「先用 coach-yc 教练梳理一轮」岔路（opt-in，梳理完接回本流水线调研）。Use when the user gives a startup idea, says "我有个 idea / 帮我看看这个想法 / 验证一下 / 做个 landing", or wants to go from idea to a testable landing page fast —— 这是从 idea 一路到 landing 的默认入口（含可选教练澄清）。
   关键词：idea 验证 / 一句话想法 / 市场分析 / 竞品分析 / 方向建议 / landing 生成 / SEO / GEO / orchestrator / 自动流水线 / idea to landing / 想法落地 / 轻量验证
-version: 1.8.0
+version: 1.9.0
 license: AGPL-3.0-or-later
 platforms: [macos, linux]
 prerequisites:
@@ -24,9 +24,10 @@ metadata:
     - "gstack/autoplan (one-command auto-decision pipeline, surface only taste gates)"
     - "gstack/office-hours (decision-brief AskUserQuestion format, smart stage routing)"
   outputs:
-    - "~/.lumilab/data/ventures/<slug>/project_brief.md (idea + 极简 intake)"
+    - "~/.lumilab/data/ventures/<slug>/project_brief.md (idea + 极简 intake + 澄清与对焦 Q/A 原文)"
     - "~/.lumilab/data/ventures/<slug>/market_analysis.json (自动分析结果，喂给报告渲染器)"
     - "~/.lumilab/data/ventures/<slug>/reports/market-report.html (图文并茂分析报告，主动交付给用户)"
+    - "~/.lumilab/data/ventures/<slug>/research/directions.json (候选方向 + chosen 回写，方向门凭据)"
     - "~/.lumilab/data/ventures/<slug>/landing/ (最终 landing page，带 SEO/GEO)"
     - "~/.lumilab/data/ventures/<slug>/decisions.yaml (方向选择记录)"
   reads:
@@ -45,10 +46,13 @@ metadata:
 1. **必须跑脚本。** Phase 里写了 `bun run scripts/...` 的，就真的去跑。不要「假装跑了」或跳过。
 2. **分析写进文件，不堆在 chat 里。** Phase 1 的市场/竞品/人群分析**必须**写进 `market_analysis.json`。**禁止**把分析当成大段文字直接发在对话里 —— 那是这个产品最大的失败模式。
 3. **必须交付 HTML。** Phase 2 的市场报告、Phase 4 的验证页，**必须**生成 HTML 文件并主动交付给用户（本地开浏览器 / chat 发文件附件）。chat 里只能贴**简短摘要**，不能贴全文。
-4. **最多问用户 2 次。** 一次是 Phase 0 的可选 intake（能跳过就跳过），一次是 Phase 3 的方向选择门（用 AskUserQuestion，结构化选项）。**其余 phase 0 提问。**
-5. **过了 Phase 3 决策门，必须一路跑到 Phase 5 产出验证页，中间不准停、不准再问。** 不准说「要不要我继续」「你回复一句继续」。决策门之后就是自动执行。
-6. **结尾不准是开放问题。** Phase 5 结尾给的是**具体路径选项**（部署 / 调方向 / 看其它方向），不是「你想怎么办」这种开放式审问。
-7. **不准在分析阶段回头追问。** Phase 1-2 不准向用户提问。缺信息就推断 —— 推断不出来也先用最合理的假设往下走，在报告里标「（推断）」。
+4. **恰好两道决策门，其余 phase 0 提问。** 第一道是 Phase 0 的**澄清门**（4-5 个对焦问题），第二道是 Phase 3 的**方向门**（先写 `research/directions.json` 再用 AskUserQuestion 让用户选）。除这两处外不准向用户提问。
+5. **澄清门问完必须真停，本轮结束。** 严禁把问题堆进「待确认」清单后同轮继续出分析，严禁「假设用户默认认可」接着跑。用户回答后，把 Q/A 原文一字不改记进 `project_brief.md` 的「澄清与对焦（用户回应记录）」小节，再进 Phase 1。用户显式说「快速模式」/「直接跑」才可跳过等待。
+6. **方向门先落盘再提问。** Phase 3 必须先把 3-4 个候选方向写进 `research/directions.json`（rationale 引用本次研究的具体证据），停下等用户选；选定后回写 `chosen` 才准进 landing 生成。
+7. **过了 Phase 3 方向门，必须一路跑到 Phase 5 产出验证页，中间不准停、不准再问。** 不准说「要不要我继续」「你回复一句继续」。方向门之后就是自动执行。
+8. **结尾不准是开放问题。** Phase 5 结尾给的是**具体路径选项**（部署 / 调方向 / 看其它方向），不是「你想怎么办」这种开放式审问。
+9. **不准在分析阶段回头追问。** Phase 1-2 不准向用户提问。缺信息就推断 —— 推断不出来也先用最合理的假设往下走，在报告里标「（推断）」。
+10. **留痕原则（Lumi Lab 总纲红线）。** 门可以被显式跳过、可以自动通过，但每次跳过 / 自动通过都**必须**在 `decisions.yaml` 留痕：时间、方式（如 `fast_mode_auto` / `user_delegated` / `user_skip`）、理由。规则是「留痕放行」，不是「FAIL 阻塞」—— 不留痕的跳过才是违规。
 
 **如果你发现自己在 chat 里写了三段以上的分析文字、或者还没产出任何 HTML 文件就停下来问用户问题 —— 你跑偏了。回到流水线。**
 
@@ -60,11 +64,20 @@ metadata:
 
 注意定位：最终产出的 landing page **不是营销页，是验证仪器**。它的工作是测量一个数字 —— 搜到关键词的人里，有多少人点了「立即购买」、留了邮箱。那个数字就是需求信号。
 
-整条流水线**只在两个地方**停下来问用户：
-1. Phase 0：**一次**可选的极简补充（能跳过）
-2. Phase 3：**一次**方向选择（3-5 个具体方向 + 推荐，用户选一个 / 说自己的 / 说「你来定」）
+整条流水线**只在两道门**停下来问用户：
+1. Phase 0 **澄清门**：一次 4-5 个对焦问题，问完真停，等回答（用户说「快速模式」/「直接跑」可跳过等待）
+2. Phase 3 **方向门**：先写 `research/directions.json`（3-4 个候选 + 推荐），停下等用户选，选定回写 `chosen`
 
 其余全自动。用户要的是「帮我判断 + 帮我做出验证工具」，不是「陪我聊」。
+
+### 快速模式护栏（只免追问，不松质量门）
+
+用户显式说「快速模式」「直接跑」「别问了」时进入快速模式。它**只免一件事：追问用户**——
+
+- 澄清门不等回答，缺的信息全部推断，推断记进 `project_brief.md` 并标「（推断）」
+- 方向门允许自动采用 `recommended: true` 的方向，但必须在 `directions.json` 回写 `chosen` 并加 `"chosen_by": "fast_mode_auto"`，同时在 `decisions.yaml` 记一条（时间、方式、理由）
+
+**不松的门，一个都不少**：有 key 仍真调 API（不许因为赶就用 LLM 知识糊）、仍跑 `validate-output.ts`、仍跑 `anti-slop-lint.ts`、仍产 `research/directions.json`。快速模式是省用户的等待，不是省流水线的活。
 
 > 如果用户**明确说**想被深度追问、想一步步梳理思路 —— 那才转 `lumilab-founder-coach` 深度模式。
 
@@ -93,6 +106,14 @@ metadata:
 ❌ 读了 SKILL.md 就开始自由发挥地「咨询式对话」 —— 这是可执行流水线，跑脚本、写文件、交付产物。
 ❌ Phase 2/4 只在 chat 里描述「我帮你做了个 landing，它长这样……」却没有真的生成 HTML 文件 —— 必须有真文件并交付。
 
+**两道门的对照：**
+
+❌ 澄清门：把 4 个对焦问题列出来，紧接着写「假设用户默认认可以上推断」，同轮继续出分析 —— 门形同虚设。
+✅ 澄清门：4-5 个问题发出去，**本轮结束**。用户回答后把 Q/A 原文一字不改记进 `project_brief.md`「澄清与对焦（用户回应记录）」，再进 Phase 1。用户说「直接跑」→ 跳过等待，`decisions.yaml` 留痕。
+
+❌ 方向门：报告一出就自行挑一个方向开始造 landing，`directions.json` 从未落盘、`chosen` 从未回写 —— 门被绕过，选择不可追溯。
+✅ 方向门：先写 `research/directions.json`（3-4 个候选，rationale 引用本次研究的具体证据），停下等用户选；选定后回写 `chosen` 再进 Phase 3.5 / Phase 4。快速模式自动采用 recommended → 写 `"chosen_by": "fast_mode_auto"` + `decisions.yaml` 记一条。
+
 ---
 
 ## Phase 0 · 极简 Intake（最多 1 次提问）
@@ -107,23 +128,25 @@ bun run scripts/orchestrate.ts init "<用户的一句话 idea>"
 # → 输出 venture slug + 检测到的 token 状态（决定后面走真 API 还是宿主 LLM 知识）
 ```
 
-### 0.2 判断要不要问
+### 0.2 澄清门（第一道决策门 —— 问完真停）
 
-读用户那句话。**如果已经包含「做什么 + 给谁」两点 → 直接跳到 Phase 1，0 提问。**
-
-只有缺关键信息时，发**一次** AskUserQuestion（决策简报式，全部可跳过）：
+init 之后、Phase 1 之前，发**一次**对焦提问：4-5 个问题，覆盖**目标人群 / 场景边界 / 最想验证的判断 / 已有资源**。决策简报式，每题带默认选项，不逼用户打字：
 
 ```
-我准备帮你跑一轮市场分析。你可以补充几点，也可以直接跳过 —— 跳过我就自己推断。
+开跑分析前对一次焦。答你想答的，其余我推断；想省这步就说「快速模式」或「直接跑」。
 
 · 怎么开始？　[直接调研（推荐，默认）] [先用教练梳理一轮]
-· 目标市场？　[出海 / 海外（推荐，默认）] [国内]
-· 目标用户大概是谁？（一句话，或「你来推断」）
-· 你希望用户用它完成什么？（或「你来推断」）
-· 有没有特别想验证的点？（或「没有，你来定」）
+· 目标人群大概是谁？在什么场景下用？（一句话，或「你来推断」）
+· 这个 idea 的边界在哪 —— 明确不做什么？（或「你来推断」）
+· 你最想验证的判断是什么？（或「没有，你来定」）
+· 手上已有什么资源？（流量 / 技能 / 渠道 / 都没有）　另：目标市场 [出海（默认）] [国内]
 ```
 
-用 AskUserQuestion 时，每个选项给「我自己推断 / 直接调研」作为一等选项，并标为推荐。**不要逼用户打字。**
+**问完就停，本轮结束。** 等用户回答，不做任何分析。严禁把问题堆进「待确认」清单后同轮继续出分析，严禁写「假设用户默认认可」接着跑。
+
+**用户回答后**：把 Q/A **原文一字不改**记进 `project_brief.md` 的「澄清与对焦（用户回应记录）」小节 —— 口语、错字、语音转写痕迹都保留，这是后续所有推断的原始依据。然后进 Phase 1。
+
+**跳过条件**：用户显式说「快速模式」/「直接跑」→ 不等回答，直接进 Phase 1（护栏见上文「快速模式护栏」），并在 `decisions.yaml` 记一条跳过留痕（时间、方式 `fast_mode` 或 `user_skip`、理由）。idea 再清晰也不自行免掉这道门 —— 跳过的决定权在用户，不在你。
 
 #### ⭐ 教练梳理岔路（可选，opt-in —— 选了才走，不破坏「analysis-first」）
 
@@ -233,11 +256,39 @@ bun run ../lumilab-studio/scripts/market-report.ts ~/.lumilab/data/ventures/<slu
 
 ---
 
-## Phase 3 · 方向选择（唯一的决策门）
+## Phase 3 · 方向门（第二道决策门）
 
-这是整条流水线**唯一**的品味决策点（autoplan 的 final approval gate）。
+这是整条流水线的最终品味决策点（autoplan 的 final approval gate）。**顺序是硬的：先落盘候选，再提问，选定回写，然后才准造 landing。**
 
-用 AskUserQuestion，决策简报式，把 `directions` 里的方向作为选项：
+### 3.0 先写 research/directions.json（门的凭据，不写不准问）
+
+从 `market_analysis.json` 的分析里收敛出 **3-4 个候选方向**，写进 `~/.lumilab/data/ventures/<slug>/research/directions.json`：
+
+```json
+{
+  "directions": [
+    {
+      "id": "d1",
+      "name": "方向名",
+      "one_liner": "一句话说清这个方向做什么",
+      "target_user": "针对哪个细分人群",
+      "rationale": "为什么值得先验证 —— 必须引用本次研究的具体证据（某竞品的 gap / 某关键词的量级与 KD / 某人群的付费意愿信号），不许写放之四海皆准的套话",
+      "recommended": true
+    }
+  ],
+  "chosen": null
+}
+```
+
+- `recommended` **恰好一个** true —— 你的判断，哪个最值得先验证
+- `rationale` 空泛（没引用本次研究证据）视为不合格，重写
+- 方向之间要真的不同（不同切口 / 不同人群 / 不同价值主张）
+
+写完这个文件，**停下**，发 AskUserQuestion 让用户选。**用户选定后回写 `chosen`（选中方向的 id）**，再进 3.x / 3.5 / Phase 4。快速模式：自动采用 recommended 方向，回写 `chosen` 并加 `"chosen_by": "fast_mode_auto"`，`decisions.yaml` 记一条。
+
+### 3.1 提问
+
+用 AskUserQuestion，决策简报式，把 `directions.json` 里的方向作为选项：
 
 ```
 D1 — 选一个方向先做 landing 验证
@@ -257,9 +308,9 @@ B) <方向2 title>
 
 - 把 `recommended: true` 的方向放第一个、标「（推荐）」
 - 用户选了 → 用那个方向
-- 用户说自己的想法 → 用用户的，但快速对照分析结果给一句判断
-- 用户说「你来定」 → 用推荐的那个
-- 把选择记进 `decisions.yaml`
+- 用户说自己的想法 → 用用户的，但快速对照分析结果给一句判断；把用户的方向补进 `directions.json`（新 id，rationale 写「用户自提」+ 你的对照判断）
+- 用户说「你来定」 → 用推荐的那个，`decisions.yaml` 留痕（方式 `user_delegated`）
+- **回写 `directions.json` 的 `chosen`**（选中方向的 id），并把选择记进 `decisions.yaml`
 
 ### 3.x 落初始假设 —— 写 `hypotheses.yaml`（必做，不可跳）
 
@@ -379,11 +430,12 @@ bun run ../lumilab-landing-mvp/scripts/validate-output.ts ~/.lumilab/data/ventur
 
 | 条件 | 走哪条 |
 |---|---|
-| 用户一句话已含「做什么+给谁」 | 跳过 Phase 0.2 提问，直接 Phase 1 |
-| 缺关键信息 | Phase 0.2 发 1 次 AskUserQuestion（可全跳过） |
+| 默认 | Phase 0.2 澄清门：4-5 个对焦问题，问完真停等回答 |
+| 用户显式说「快速模式」/「直接跑」 | 跳过两道门的等待；质量门照跑；`decisions.yaml` 留痕 |
+| 快速模式到 Phase 3 | 自动采用 recommended，`directions.json` 写 `"chosen_by": "fast_mode_auto"` |
 | 有 TikHub/Tavily token | Phase 1 走真实 API |
 | 无 token | Phase 1 用宿主 LLM 知识，不停下来让用户配 |
-| 用户在 Phase 3 说「你来定」 | 用 `recommended: true` 的方向 |
+| 用户在 Phase 3 说「你来定」 | 用 `recommended: true` 的方向，回写 `chosen`，留痕 `user_delegated` |
 | 用户在 Phase 3 给了自己的方向 | 用用户的，对照分析给一句判断 |
 | 用户明确要「一步步深聊」 | 转 `lumilab-founder-coach` 深度模式 |
 | LUMILAB_CHANNEL != local | HTML 产物走文件附件交付 + chat 文字摘要 |
@@ -464,6 +516,7 @@ bun run ../lumilab-landing-mvp/scripts/validate-output.ts ~/.lumilab/data/ventur
 - `~/.lumilab/data/ventures/<slug>/project_brief.md` — idea + intake
 - `~/.lumilab/data/ventures/<slug>/market_analysis.json` — 自动分析结果
 - `~/.lumilab/data/ventures/<slug>/reports/market-report.html` — 图文并茂分析报告（主动交付）
+- `~/.lumilab/data/ventures/<slug>/research/directions.json` — 候选方向 + `chosen` 回写（方向门凭据）
 - `~/.lumilab/data/ventures/<slug>/design_direction.json` — 自动选的设计方向
 - `~/.lumilab/data/ventures/<slug>/landing/` — 最终 landing page（含 SEO/GEO）
 - `~/.lumilab/data/ventures/<slug>/decisions.yaml` — 方向选择记录
@@ -474,14 +527,18 @@ bun run ../lumilab-landing-mvp/scripts/validate-output.ts ~/.lumilab/data/ventur
 ```
 User（飞书）: 我想做一个帮自由职业者管理多个客户项目的工具
 Bot: [跑 orchestrate.ts init] → venture: freelancer-project-hub，token 状态已检测
-     [Phase 0.2] idea 已含「做什么+给谁」→ 跳过提问
+     [Phase 0.2 澄清门] 发 5 个对焦问题（人群/场景边界/最想验证/资源/市场）→ 本轮结束，等回答
+User: 主要给设计类自由职业者，先验证他们愿不愿意付月费，我有个 2000 人的社群
+Bot: [Q/A 原文记进 project_brief.md「澄清与对焦（用户回应记录）」]
      [Phase 1] 分析市场/竞品/人群 → 写进 market_analysis.json（不在 chat 里堆文字）
      [跑 validate-output.ts] → 校验通过
      [Phase 2] 跑 market-report.ts → 生成 market-report.html
      → 飞书发 HTML 文件附件 + chat 里只贴 5 行摘要
-     [Phase 3] AskUserQuestion：3 个方向，推荐「按客户分账的轻量看板」
+     [Phase 3 方向门] 先写 research/directions.json（3 个候选，rationale 带研究证据）
+     → AskUserQuestion：3 个方向，推荐「按客户分账的轻量看板」→ 停，等选择
 User: A
-Bot: [Phase 4 立刻开始，不问「要不要继续」]
+Bot: [回写 directions.json 的 chosen: "d1"，decisions.yaml 记选择]
+     [Phase 4 立刻开始，不问「要不要继续」]
      自动定 design direction → 跑 landing-mvp 生成 fake-door 验证页
      （真实「立即购买」CTA + fake-door modal + 转化追踪 JS + SEO/GEO）
      [跑 validate-output.ts] → 校验通过
@@ -550,6 +607,7 @@ Lumi Lab 的差异：**一句话进，分析 + 方向判断 + 设计 + SEO/GEO l
 
 ## Changelog
 
+- **1.9.0** (2026-07-10) — 加两道决策门 + 快速模式护栏。澄清门（Phase 0.2）：4-5 个对焦问题，问完真停等回答，Q/A 原文记进 project_brief.md；方向门（Phase 3.0）：先写 `research/directions.json`（rationale 引研究证据）再问，选定回写 `chosen`。快速模式只免追问不松质量门（真 API / validate-output / anti-slop-lint / directions.json 照跑），自动过方向门写 `chosen_by: fast_mode_auto`。留痕原则入 EXECUTION CONTRACT：跳过 / 自动通过必须在 decisions.yaml 留痕，「留痕放行」不「FAIL 阻塞」。
 - **1.2.0** (2026-05-14) — 加硬性 EXECUTION CONTRACT + 反例清单（修 Hermes 实测「分析堆 chat、不出 HTML、结尾问开放问题」的跑偏）。reframe 为 C 端 idea 验证：Phase 4 产出 fake-door 验证页（测购买意愿），Phase 5 加「怎么跑验证 + 回收数据」。
 - **1.1.0** (2026-05-14) — 新建。Lumi Lab 默认入口，autoplan 式 orchestrator。
 

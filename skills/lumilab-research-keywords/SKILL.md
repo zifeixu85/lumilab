@@ -3,7 +3,7 @@ name: lumilab-research-keywords
 description: |
   Quantitative search-demand validation for venture ideas. Given the product keywords behind an idea, reverse-searches Google search demand: search volume, CPC, competition, keyword difficulty, 12-month trend, related + long-tail + "People Also Search For" expansion. Scores each keyword direction as Blue Ocean / Red Ocean / Differentiation Opportunity. Pluggable provider layer — default DataForSEO (pay-as-you-go), optional Keywords Everywhere. SERP competition depth filled via lumi-lab's existing Playwright / Tavily. Feeds hypothesis-ledger as demand evidence and research-platforms cross-platform synthesis. Use when user types /lumilab keywords or asks for search volume / keyword difficulty / 红蓝海 / 关键词热度 / SEO 需求.
   关键词：关键词调研 / keyword research / 搜索量 / search volume / 关键词难度 / keyword difficulty / 长尾词 / long-tail / 趋势 / trend / 红海蓝海 / blue ocean / red ocean / 差异化机会 / SEO 需求验证 / DataForSEO / Keywords Everywhere
-version: 1.6.1
+version: 1.7.0
 status: P0-ready
 metadata:
   hermes:
@@ -23,6 +23,8 @@ metadata:
     - "data/ventures/<name>/research/keyword_landscape.md (★ 推荐先看 — 红蓝海地图)"
     - "data/ventures/<name>/research/keyword_metrics.csv (每个关键词全字段，供 Studio 渲染)"
     - "data/ventures/<name>/research/keyword_sources.jsonl (一行一条原始 API 返回，可追溯)"
+    - "data/ventures/<name>/research/raw/dataforseo/*.json (真调 API 的原始响应留痕)"
+    - "data/ventures/<name>/research/raw/<provider>_error.json (调用失败留证：时间戳/端点/状态码/截断响应体)"
   reads:
     - "data/ventures/<name>/project_brief.md (idea + 种子关键词)"
     - "data/ventures/<name>/hypotheses.yaml (要验证什么需求)"
@@ -98,6 +100,10 @@ Lumi Lab 的调研有两层，互补：
 **默认 `dataforseo`**：产品要给第三方用户用，充值即用、余额不过期，门槛最低。
 **`keywordseverywhere`**：给本身已订阅 KE 的用户省钱用；它缺 KD 分数和 SERP 分析，由 SERP 探测层补齐。
 
+### DataForSEO 调用（实测结论）
+
+**实测结论**：搜索量走 `POST /v3/keywords_data/google_ads/search_volume/live` 端点，**Basic 认证**（`login:password` base64）。遇 **50301 限流**不要立即降级——隔 30–60 秒重试 1–2 次，通常能过；重试仍失败才降级为启发式估计，且降级前必须写 `research/raw/dataforseo_error.json`（见「证据留存纪律」）。成功响应原样落 `research/raw/dataforseo/*.json`。
+
 provider 在 `~/.lumilab/config.json` 里配：
 
 ```json
@@ -128,6 +134,9 @@ provider 在 `~/.lumilab/config.json` 里配：
    ← project_brief.md 的产品关键词 + hypotheses.yaml 里要验证的需求
    ← 或 --seed 直接给
 
+1.5 英文关键词阶梯（中文想法 → 真实英文搜索表达，见下节）
+   中文种子词先转成英文用户真实会搜的表达，分四级铺开，再进扩展
+
 2. 关键词扩展（dzhng breadth × depth 思路）
    DataForSEO:        Labs Related Keywords + Keyword Suggestions + Keyword Ideas
    KeywordsEverywhere: Get Related Keywords + Get PASF Keywords
@@ -155,6 +164,28 @@ provider 在 `~/.lumilab/config.json` 里配：
    → 触发 Studio 重渲染 Research Insights
 ```
 
+## 英文关键词阶梯（中文想法 → 真实英文搜索表达）
+
+面向英文市场（`country: us` 等）时，**中文想法不许直译**——直译出来的词没人搜。先把中文意图转成英文用户真实会敲进 Google 的表达，再分四级铺开：
+
+```
+head_term → short_phrase → mid_tail → long_tail
+```
+
+| 级别 | 例（中文意图：「AI 改写不丢味」） | 特征 |
+|---|---|---|
+| `head_term` | ai rewriter | 1–2 词，量大竞争大，定位市场 |
+| `short_phrase` | ai rewriting tool | 2–3 词，品类词 |
+| `mid_tail` | ai rewrite without losing voice | 4–6 词，带具体诉求 |
+| `long_tail` | how to rewrite content for multiple platforms without sounding generic | 完整问题 / 场景句，量小转化高 |
+
+每个转换出来的词必须保留两个字段（写进 `keyword_sources.jsonl` 或对应产物）：
+
+- `original_chinese_intent`：这个英文词对应的中文原始意图
+- `translation_reason`：为什么选这个表达而不是直译（一句话，如「英文用户说 'losing voice' 不说 'losing flavor'」）
+
+四级都进第 2 步扩展；landscape.md 里标注每个词属于哪级，红蓝海判断按级别分开看（head 红海正常，long_tail 蓝海才有意义）。
+
 ## 统一 KeywordMetric Schema
 
 不同 provider 的返回归一到这个结构，写入 `keyword_sources.jsonl`（一行一条）：
@@ -171,6 +202,9 @@ interface KeywordMetric {
   trend_slope: number;                  // 派生：线性回归斜率，正=上升
   serp_strong_count: number | null;     // SERP 首页强域名数（0–10），serp_probe 产出
   relation: 'seed' | 'related' | 'longtail' | 'pasf';
+  ladder?: 'head_term' | 'short_phrase' | 'mid_tail' | 'long_tail';  // 英文关键词阶梯级别
+  original_chinese_intent?: string;     // 英文词对应的中文原始意图（阶梯转换时必填）
+  translation_reason?: string;          // 为什么选这个表达而不是直译（阶梯转换时必填）
   opportunity_score: number;            // 见评分公式
   verdict: 'blue_ocean' | 'red_ocean' | 'differentiation' | 'low_demand';
   retrieved_at: string;                 // ISO-8601
@@ -207,6 +241,12 @@ opportunity_score = round( demand * momentum / friction , 2 )
 
 ```markdown
 # Keyword Landscape — {venture}
+
+## 关键发现
+
+1. {一句话结论，如「'ai rewrite without losing voice' 月搜索量 1,300 / KD 18，是最佳蓝海切口」} — 证据：[research/raw/dataforseo/search_volume_01.json]
+2. {一句话结论} — 证据：[keyword_sources.jsonl#L12]
+3. {一句话结论} — 证据：[keyword_metrics.csv]
 
 ## 红蓝海地图
 
@@ -317,12 +357,40 @@ interface KeywordProvider {
 - DataForSEO：注册 → 充值 $50 → API Dashboard 取 login/password → Verify 打 `GET /v3/appendix/user_data`
 - Keywords Everywhere：装插件取 API key → Verify 打 `GET /get_credits`（返回 credit 余额）
 
+## 关键发现契约（每份 .md 研究产物）
+
+本 skill 写出的每份研究 .md 产物（`keyword_landscape.md` 及任何补充报告），**H1 之后必须紧跟 `## 关键发现` 小节**：
+
+- 3–5 条，结论先行——每条一句话结论 + 指向证据文件（raw json 路径或 `文件#行号/条目`）。
+- 不许放「背景」「方法说明」在关键发现之前；读者 10 秒内看到最重要的结论。
+- Studio 报告页用这个小节做高亮卡，缺了它报告页只能空着。
+
+## 证据留存纪律（留痕放行，不是 FAIL 阻塞）★
+
+**规则：有 key 却没有 raw 落盘 = 该项研究视为未完成。** 绝不允许无证据的「像是查过了」。
+
+真调 provider API（DataForSEO / Keywords Everywhere）时：
+
+- **成功也留**：原始响应原样落盘 `data/ventures/<slug>/research/raw/<provider>/*.json`（provider = dataforseo / keywordseverywhere，一次调用一个文件，文件名带端点 + 序号）。`keyword_sources.jsonl` 是归一后的记录，**不能替代** raw 落盘。
+- **失败也留**：写 `research/raw/<provider>_error.json`——时间戳、端点、状态码、截断的响应体。**任何降级（转启发式估计）必须先有这个文件**，没有 error.json 的降级视同无证据。
+- validate 时发现「secrets 里有 token 但 raw/ 目录为空」→ 报 **WARN**（不 FAIL 阻塞），并要求在 `decisions.yaml` 留痕说明原因。允许显式偏离（比如「本轮复用历史快照」），但必须留痕，不允许静默。
+
+与「无 token 启发式估计 + 宿主核对」并列成两条路径，**两条路都不允许无证据结论**：
+
+| 路径 | 前提 | 证据要求 |
+|---|---|---|
+| 真调 provider | 有 token | 原始响应落 `raw/<provider>/`；失败落 `raw/<provider>_error.json` |
+| 启发式估计 | 无 token（或有 error.json 的降级） | `source: agent-estimate` 明确标注，量级估计只做方向性解读 |
+
 ## 必做约束
 
 ```
 ✓ 默认 read-only（只查不改）
 ✓ provider 调用带 rate limit + 重试（DataForSEO task 模式异步轮询；KE 单次 ≤100 词）
 ✓ 每条 KeywordMetric 带 provider + retrieved_at（可追溯，写 keyword_sources.jsonl）
+✓ 真调 provider 必落 raw/<provider>/ 原始响应；失败必落 raw/<provider>_error.json（见「证据留存纪律」）
+✓ keyword_landscape.md H1 后紧跟「## 关键发现」（见「关键发现契约」）
+✓ 英文市场的中文种子词必走英文关键词阶梯，保留 original_chinese_intent + translation_reason
 ✓ KD 缺失（KE）必须走 serp_probe 估算，不能留空就评分
 ✓ 评分阈值全部走 config，不硬编码
 ✓ 发现强信号必 surface 给用户，不自动写 hypotheses.yaml
@@ -411,7 +479,7 @@ provider token（DataForSEO login/password、Keywords Everywhere key）走 keych
 
 ## Failure modes
 
-`E_401` / `E_AUTH` 立即提示 token 失效；`E_429` 由 provider 层等待 + 退避；单个扩展端点失败只记 stderr 不中断整体；任意 provider 整体失败 / 无网络 / 无 token → **降级为启发式量级估计**（`source: agent-estimate`，宿主 agent 据知识核对方向），**非 mock 假数据**，退出码仍为 0，下游不阻塞。`--mock` 仍保留，仅测试用。
+`E_401` / `E_AUTH` 立即提示 token 失效；`E_429` 由 provider 层等待 + 退避；DataForSEO `50301` 限流 → 隔 30–60 秒重试 1–2 次，仍失败才降级（**降级前必写 `raw/dataforseo_error.json`**）；单个扩展端点失败只记 stderr 不中断整体；任意 provider 整体失败 / 无网络 / 无 token → **降级为启发式量级估计**（`source: agent-estimate`，宿主 agent 据知识核对方向），**非 mock 假数据**，退出码仍为 0，下游不阻塞。`--mock` 仍保留，仅测试用。
 
 ## Edge cases
 
@@ -436,6 +504,7 @@ Lumi Lab 的差异：pluggable provider（DataForSEO 默认 PAYG / Keywords Ever
 
 ## Changelog
 
+- **1.7.0** — 新增「证据留存纪律」：真调 provider 原始响应落 `research/raw/<provider>/*.json`，失败留 `raw/<provider>_error.json`，有 token 无 raw = 研究未完成（validate WARN + decisions.yaml 留痕）。新增「关键发现契约」：keyword_landscape.md H1 后紧跟 `## 关键发现`（3–5 条结论先行 + 证据文件指向）。写入实测结论：DataForSEO `search_volume/live` 端点 Basic 认证，50301 限流隔 30–60 秒重试 1–2 次再降级。新增「英文关键词阶梯」：中文意图转真实英文搜索表达，`head_term → short_phrase → mid_tail → long_tail` 四级，KeywordMetric 增 `ladder` / `original_chinese_intent` / `translation_reason` 字段。frontmatter outputs 补 raw/ 与 error.json 路径。
 - **1.3.0** — 新增 `scripts/`：research.ts 主入口 + scoring.ts + serp-probe.ts + providers/（index / dataforseo / keywords-everywhere）+ validate-output.ts + anti-slop-lint.ts；补齐 bundle 标准段（Dependencies / Output validation / Example / Tests / 环境自检 / Idempotency / Privacy / Cache / Failure modes / Edge cases / Alternatives / Moat / 主动交付）；frontmatter 升 v1（version 1.3.0 / license / platforms / prerequisites / compatibility / metadata.lumilab + hermes.tags）。
 - **0.1.0** — 初版：pluggable provider 定量搜索需求验证 + 红蓝海评分规格。
 

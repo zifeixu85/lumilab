@@ -3,7 +3,7 @@ name: lumilab-research-platforms
 description: |
   Dual-channel platform research for venture validation. Channel A = browser automation (Playwright / CDP) for 小红书 (P0), 抖音 / 微博 / 知乎 / B 站 (P1). Channel B = third-party APIs (Tavily / Tavily for web; TikHub / 飞瓜 / 新榜 for China). Outputs cross-platform synthesis with pain point density, source URLs, evidence excerpts. Feeds back to hypothesis-ledger as evidence. Use when user types /lumilab research or asks for market/competitor/painpoint data.
   关键词：调研 / research / 市场调研 / 竞品分析 / 小红书搜索 / web search / 双通道 / Playwright / Tavily / TikHub / cross-platform / 痛点挖掘
-version: 1.6.1
+version: 1.7.0
 metadata:
   hermes:
     tags: [xhs, tavily, tikhub, research, playwright]
@@ -25,6 +25,8 @@ metadata:
     - "data/ventures/<name>/research/web_tavily.json (Web 原始搜索数据)"
     - "data/ventures/<name>/research/cross_platform_synthesis.md (★ 推荐先看，跨平台合成)"
     - "data/ventures/<name>/research/painpoint_density.csv (痛点跨平台分布)"
+    - "data/ventures/<name>/research/raw/<provider>/*.json (真调 API 的原始响应留痕，provider = tavily/tikhub 等)"
+    - "data/ventures/<name>/research/raw/<provider>_error.json (调用失败留证：时间戳/端点/状态码/截断响应体)"
   reads:
     - "data/ventures/<name>/project_brief.md (idea + 关键词)"
     - "data/ventures/<name>/hypotheses.yaml (要验证什么)"
@@ -106,7 +108,19 @@ compatibility: "Claude Code, OpenClaw 2026.4.25+, Hermes Agent v0.13.0+, Cursor,
 
 **Chrome profile 管理**：用 `~/.lumilab/config.json.search.xhs_chrome_profile`（默认 "openclaw"）。允许用户配多账号 profile。
 
+## XHS TikHub 通道
+
+**实测结论**：TikHub 小红书**只用 app_v2 系列端点**——`GET /api/v1/xiaohongshu/app_v2/search_notes`（`Authorization: Bearer <token>`）。web 系列端点（`/xiaohongshu/web/...`）会 403，不要试。原始响应必须落盘 `research/raw/tikhub/*.json`（见「证据留存纪律」）。
+
 ## Web Tavily 流程（dzhng/deep-research 算法）
+
+**实测结论**：Tavily 分三级用法，按调研深度选——
+
+1. **`/search`**：常规检索。带 `search_depth: "advanced"` + `chunks_per_source: 3` 取更完整正文片段；中文 / 中国市场需求**必须加 `country: "china"`**，否则结果偏英文世界。
+2. **`/extract`**（advanced）：竞品页正文抽取，一次最多 20 个 URL，返回 markdown——拿到候选竞品列表后批量抽正文用这个，不要逐页 `/search`。
+3. **`/research`**（mini 档）：异步深度研究。提交后**不阻塞**——先并行去跑其它调研线（XHS / 关键词），约 3 分钟后回收结果；支持传 `output_schema` 直接产结构化底稿，省一轮归一。
+
+三级的原始响应都落盘 `research/raw/tavily/*.json`（见「证据留存纪律」）。
 
 ```
 function deepResearch(query, breadth=3, depth=2) {
@@ -166,6 +180,12 @@ interface SearchResult {
 ```markdown
 # Cross-Platform Synthesis - {venture}
 
+## 关键发现
+
+1. {一句话结论} — 证据：[research/raw/tavily/r45.json] [xhs_raw.json#n123]
+2. {一句话结论} — 证据：[research/raw/tikhub/search_notes_01.json]
+3. {一句话结论} — 证据：[research/web_tavily.json#r12]
+
 ## Pain Point Density (来自所有 sources)
 
 | 痛点 | XHS | Web | 抖音 | 加权 | Evidence |
@@ -197,6 +217,14 @@ interface SearchResult {
 2. 调 lumilab-product-pmf 重新评估 PMF 信号
 3. 重新跑 lumilab-content-repurpose 调整钩子方向
 ```
+
+## 关键发现契约（每份 .md 研究产物）
+
+本 skill 写出的每份研究 .md 产物（`cross_platform_synthesis.md` 及任何补充报告），**H1 之后必须紧跟 `## 关键发现` 小节**：
+
+- 3–5 条，结论先行——每条一句话结论 + 指向证据文件（raw json 路径或 `文件#条目id`）。
+- 不许放「背景」「方法说明」在关键发现之前；读者 10 秒内看到最重要的结论。
+- Studio 报告页用这个小节做高亮卡，缺了它报告页只能空着。
 
 ## Painpoint Density CSV
 
@@ -269,6 +297,8 @@ user_input:
 ✓ 默认 read-only（不替用户回复评论 / 私信）
 ✓ 各平台 rate limit 内置（XHS 不超 50 笔记/次，避免风控）
 ✓ 抓取数据带 timestamp + source URL（可追溯）
+✓ 真调 API 必落 raw/<provider>/ 原始响应；失败必落 raw/<provider>_error.json（见「证据留存纪律」）
+✓ 每份研究 .md 产物 H1 后紧跟「## 关键发现」（见「关键发现契约」）
 ✓ Cross-platform synthesis 必带 evidence 引用
 ✓ 发现冲突信号必 surface 给用户（不自决 supersede）
 ✓ 用户的 Chrome profile 不污染（独立 profile，关闭时不存 cookie）
@@ -302,6 +332,23 @@ user_input:
 | XHS 未登录态 + headless 环境 | 跳过 XHS Playwright，走宿主代搜或 API，不强制扫码 |
 | 同一 keyword 24h 内已有 raw json 且无 `--force` | 复用缓存，不重新抓取 |
 | synthesis 发现跨平台强信号与现有 hypothesis 冲突 | surface 给用户选 supersede，不自决 |
+
+## 证据留存纪律（留痕放行，不是 FAIL 阻塞）★
+
+**规则：有 key 却没有 raw 落盘 = 该项研究视为未完成。** 绝不允许无证据的「像是查过了」。
+
+真调 API（Tavily / TikHub / 飞瓜 / 新榜 …）时：
+
+- **成功也留**：原始响应原样落盘 `data/ventures/<slug>/research/raw/<provider>/*.json`（provider = tavily / tikhub / dataforseo 等，一次调用一个文件，文件名带端点 + 序号）。
+- **失败也留**：写 `research/raw/<provider>_error.json`——时间戳、端点、状态码、截断的响应体。**任何降级（转宿主代搜 / 换通道）必须先有这个文件**，没有 error.json 的降级视同无证据。
+- validate 时发现「secrets 里有 key 但 raw/ 目录为空」→ 报 **WARN**（不 FAIL 阻塞），并要求在 `decisions.yaml` 留痕说明原因。允许显式偏离（比如「本轮只用缓存」），但必须留痕，不允许静默。
+
+与「无 key 宿主代搜 + ingest 拒 mock」并列成两条路径，**两条路都不允许无证据结论**：
+
+| 路径 | 前提 | 证据要求 |
+|---|---|---|
+| 真调 API | 有 key | 原始响应落 `raw/<provider>/`；失败落 `raw/<provider>_error.json` |
+| 宿主代搜 | 无 key（或有 error.json 的降级） | ingest 校验真实 URL / 真知识，拒绝 mock（见下节） |
 
 ## 无 key 兜底：宿主代搜（绝不落 mock）★
 
@@ -351,7 +398,7 @@ bun run scripts/validate-output.ts data/ventures/<name>/research/
 
 ## Outputs
 
-`data/ventures/<slug>/research/xhs_raw.json` · `research/web_tavily.json` · `research/cross_platform_synthesis.md` · `research/painpoint_density.csv`
+`data/ventures/<slug>/research/xhs_raw.json` · `research/web_tavily.json` · `research/cross_platform_synthesis.md` · `research/painpoint_density.csv` · `research/raw/<provider>/*.json`（真调 API 原始响应） · `research/raw/<provider>_error.json`（调用失败留证）
 
 ## Example
 
@@ -397,6 +444,7 @@ research/history/ 累积所有抓取快照，同一 keyword 跨时间的趋势�
 
 ## Changelog
 
+- **1.7.0** — 新增「证据留存纪律」：真调 API 原始响应落 `research/raw/<provider>/*.json`，失败留 `raw/<provider>_error.json`，有 key 无 raw = 研究未完成（validate WARN + decisions.yaml 留痕）；与宿主代搜并列成两条路径。新增「关键发现契约」：每份研究 .md H1 后紧跟 `## 关键发现`（3–5 条结论先行 + 证据文件指向）。写入实测结论：TikHub XHS 只用 app_v2 端点（web 系列 403）；Tavily 三级用法（/search advanced + country:china、/extract 批量抽正文、/research mini 异步回收）。frontmatter outputs 补 raw/ 与 error.json 路径。
 - **1.0.0-rc4** — 新增 `scripts/validate-output.ts`（xhs_raw.json / web_tavily.json 确定性 schema 校验器）+ Output validation 段；新增 分支决策 if-then 表；Dependencies 表加单次调用约成本列；统一 outputs 文件名（frontmatter / 正文 / Outputs 段一致，改用脚本真实产出的 xhs_raw.json / web_tavily.json）。
 - **1.0.0-rc1** — 初版：双通道平台调研 + 跨平台合成。
 

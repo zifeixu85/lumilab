@@ -6,6 +6,24 @@
 
 ---
 
+## [1.15.0] · 2026-07-10 · 两道决策门 + 证据留存纪律 + 假设分型（OPC 实战回移植）
+
+> 背景：这批改进来自 Lumi Lab 的姊妹系统「OPC 商业验证作战室」在黑客松中的实战验证。只回移植普适性进化（决策门、留证、分型、结构化方案层），不搬它为绕平台限制做的妥协设计（固定模板、确定性渲染）——自由设计仍是 Lumi Lab 的差异化核心。
+
+### Added
+- **两道决策门**（idea-to-landing 1.9.0）：**澄清门**——研究开始前一次 4-5 个对焦问题，问完真停等回答，Q/A 原文一字不改记入 project_brief.md；**方向门**——研究报告后先落盘 `research/directions.json`（3-4 个候选方向，rationale 引用本次研究证据，恰一个 recommended），等用户选定回写 `chosen` 才造 landing。**快速模式护栏**：说「快速模式」只免追问，不松任何质量门；自动过方向门写 `chosen_by: fast_mode_auto` 并在 decisions.yaml 留痕。
+- **证据留存纪律**（research-platforms / research-keywords 1.7.0）：真调 API 的原始响应落盘 `research/raw/<provider>/*.json`，调用失败也留 `<provider>_error.json`；「有 key 却无 raw = 该项研究未完成」，validate 报 WARN 且须在 decisions.yaml 留痕说明——留痕放行，不 FAIL 阻塞。与既有「无 key 宿主代搜 + ingest 拒 mock」并列为两条都不允许无证据结论的路径。
+- **实测踩坑知识固化**：TikHub 小红书只用 app_v2 端点（web 系列 403）；DataForSEO 50301 限流隔 30-60s 重试再降级；Tavily 三级用法（search advanced + chunks_per_source:3 + country:china / extract 批量抽正文 / research mini 异步深度研究，支持 output_schema）。
+- **英文关键词阶梯**（research-keywords）：中文想法转真实英文搜索表达（非直译），四级 head_term → short_phrase → mid_tail → long_tail，保留 original_chinese_intent 与 translation_reason 溯源。
+- **假设分型**（hypothesis-ledger 1.6.0）：每条假设新增 `type: value|growth`（价值与增长假设并行验证不排队）、`kill_condition`（不成立 → 后果 + 转向动作）、`validation_level`（验证方式 × 成本 vs 直接开发成本）；证据带 `source_tag` 九枚举，`estimated_not_exact` 不得驱动「已支持」；状态变更必带 `confidence_delta` + `changed_reason`。旧账本向后兼容。
+- **方案层三件套**（product-mvp 1.6.0）：`personas.json`（证据画像，每条 evidence ≥3 且指向证据文件，不足如实标 insufficient 不编造）、`experience_map.json`（认知→比较→试用→付费四阶段 + mood + 机会点挂 hypothesis_id）、`bmc.json`（九格画布，收入流带验证状态）。顺序：riskiest_assumptions → personas → experience_map → bmc → mvp_plan。
+- **R6 基线回灌**（metrics 1.7.0）：小红书信号折算约定（收藏>点赞、「求链接」≈cta_click、私信问价≈lead，C 层）；事件阶梯 `page_view < cta_click < price_intent < contact_submit < payment_test`（既有命名用 mapping 归级，不强改埋点）；C 层条目补「经验基线，以自测为准」。
+- **每份研究产物的「关键发现」契约**：H1 后紧跟 3-5 条一句话结论 + 证据文件指向，供 Studio 报告页做高亮卡。
+
+### Changed
+- **bundle SKILL.md 新增「设计红线」三条**（对所有 skill 生效）：契约只管数据层不碰表现层；规则是「留痕放行」不是「FAIL 阻塞」；结论必须有证据（真调留 raw / 宿主代搜拒 mock）。
+- 「最多打扰你 2 次」的两次交互升级为两道决策门（对焦问答 + 方向选择），快速模式可全跳过并留痕。
+
 ## [1.14.2] · 2026-06-01 · Studio 多处修复 + 小红书配图默认走 HTML 渲染
 
 ### Fixed

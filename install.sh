@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Lumi Lab · 安装 / 升级 skills bundle 到 ~/.claude/skills/
+# Lumi Lab · 安装 / 升级 skills bundle
 #
 # 用法：
 #   ./install.sh                   # 交互模式（全新装 / 升级自动判断）
@@ -8,8 +8,9 @@
 #   ./install.sh --no-bun          # 不自动装 bun（缺了只警告）
 #
 # 设计保证：
-#   · 只写 ~/.claude/skills/lumilab-* 和 ~/.lumilab/bin/lumilab
-#   · 绝不动用户数据：~/.lumilab/data/（venture）/ secrets.json / config.json / .env 全部保留
+#   · 写入 ~/.lumilab/skills/lumilab-* 供 CLI 自用
+#   · 同步写入宿主 Agent 的 skills 目录，供 Claude / Codex / OpenClaw / Gemini 发现
+#   · 绝不动用户数据：~/.lumilab/data/（venture）/ secrets.json / secrets.index.json / shares.json / config.json / .env 全部保留
 #   · 升级时自动备份旧 skills 到 ~/.lumilab/backups/，可回滚
 #   · 不删除 ~/.claude/skills/ 下别人的其它 skill
 
@@ -20,6 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$SCRIPT_DIR/skills"
 TARGET_DIR="${HOME}/.claude/skills"
 LUMILAB_HOME="${LUMILAB_HOME:-${HOME}/.lumilab}"
+RUNTIME_SKILLS_DIR="${LUMILAB_HOME}/skills"
 ASSUME_YES=0
 AUTO_BUN=1
 
@@ -93,11 +95,12 @@ if [[ -n "$OLD_VERSION" ]]; then
       2) MODE="downgrade"; c_warn "  ⚠ 你装的是更新的 v${OLD_VERSION}，这是 v${NEW_VERSION}（降级）" ;;
     esac
   fi
-  echo "  ✓ 你的本地数据会完整保留：venture / secrets.json / config.json / .env 都不动"
+  echo "  ✓ 你的本地数据会完整保留：venture / secrets.json / secrets.index.json / shares.json / config.json / .env 都不动"
 else
   c_dim "  全新安装"
 fi
-echo "  目标：$TARGET_DIR"
+echo "  CLI 运行时 skills：$RUNTIME_SKILLS_DIR"
+echo "  宿主目标：$TARGET_DIR"
 echo
 
 # ── 3. bun（CLI + skill 脚本必需）──
@@ -147,7 +150,9 @@ fi
 
 # ── 预览 ──
 SKILL_COUNT=$(find "$SOURCE_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
-echo "  将安装 ${SKILL_COUNT} 个 skill 到 ${#TARGETS[@]} 个 agent 宿主："
+echo "  将安装 ${SKILL_COUNT} 个 skill 到 Lumi Lab CLI 运行时："
+printf "    · %-12s %s\n" "Lumi Lab" "$RUNTIME_SKILLS_DIR"
+echo "  并同步到 ${#TARGETS[@]} 个 agent 宿主："
 for i in "${!TARGETS[@]}"; do printf "    · %-12s %s\n" "${HOSTLABELS[$i]}" "${TARGETS[$i]}"; done
 if [[ $ASSUME_YES -ne 1 ]]; then
   read -r -p "继续？[Y/n] " ans
@@ -160,6 +165,12 @@ if [[ "$MODE" == "upgrade" || "$MODE" == "downgrade" ]]; then
   BACKUP_DIR="$LUMILAB_HOME/backups/skills-${OLD_VERSION}"
   if [[ ! -d "$BACKUP_DIR" ]]; then
     mkdir -p "$BACKUP_DIR"
+    if [[ -d "$RUNTIME_SKILLS_DIR" ]]; then
+      mkdir -p "$BACKUP_DIR/runtime"
+      for d in "$RUNTIME_SKILLS_DIR"/lumilab-*/; do
+        [[ -d "$d" ]] && cp -R "$d" "$BACKUP_DIR/runtime/" 2>/dev/null || true
+      done
+    fi
     for d in "$TARGET_DIR"/lumilab-*/; do
       [[ -d "$d" ]] && cp -R "$d" "$BACKUP_DIR/" 2>/dev/null || true
     done
@@ -167,7 +178,7 @@ if [[ "$MODE" == "upgrade" || "$MODE" == "downgrade" ]]; then
   fi
 fi
 
-# ── 6. 逐个 skill 复制到每个目标宿主（绝不 --delete，不碰用户其它 skill）──
+# ── 6. 逐个 skill 复制到 CLI 运行时和每个目标宿主（绝不 --delete，不碰用户其它 skill）──
 copy_one() { # $1=源 skill 目录  $2=目标 skills 根
   local d="$1" root="$2"; local name dest
   name=$(basename "$d"); dest="$root/$name"; rm -rf "$dest"
@@ -183,6 +194,10 @@ copy_one() { # $1=源 skill 目录  $2=目标 skills 根
   fi
 }
 COPIED=0
+mkdir -p "$RUNTIME_SKILLS_DIR"; n=0
+for d in "$SOURCE_DIR"/lumilab-*/; do [[ -d "$d" ]] || continue; copy_one "$d" "$RUNTIME_SKILLS_DIR"; n=$((n+1)); done
+c_ok "✓ ${n} 个 skill → Lumi Lab CLI（${RUNTIME_SKILLS_DIR}）"
+COPIED=$n
 for i in "${!TARGETS[@]}"; do
   root="${TARGETS[$i]}"; mkdir -p "$root"; n=0
   for d in "$SOURCE_DIR"/lumilab-*/; do [[ -d "$d" ]] || continue; copy_one "$d" "$root"; n=$((n+1)); done
@@ -233,4 +248,5 @@ fi
 [[ "$MODE" == "upgrade" || "$MODE" == "downgrade" ]] && echo "  ▶ 回滚：旧版 skills 备份在 $LUMILAB_HOME/backups/"
 echo "  ▶ Cursor（仅项目级）：在项目根目录跑"
 echo "      mkdir -p .cursor/skills && cp -R \"\$HOME/.claude/skills/\"lumilab-* .cursor/skills/"
+echo "  ▶ CLI 运行时 skills：$RUNTIME_SKILLS_DIR"
 echo "──────────────────────────────────────────────"

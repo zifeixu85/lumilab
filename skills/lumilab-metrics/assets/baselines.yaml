@@ -73,6 +73,7 @@ xhs_interaction:
   strong: 0.08
   tier: C
   src: "经验值，需自测"
+  note: "经验基线，以自测为准"
   label: "小红书互动率（收藏+点赞/阅读）"
 
 wechat_moments_dm:
@@ -81,4 +82,31 @@ wechat_moments_dm:
   strong: 6
   tier: C
   src: "经验值，需自测（绝对条数，不是比率）"
+  note: "经验基线，以自测为准"
   label: "朋友圈主动私信「在哪买」条数"
+
+# ── 小红书信号折算约定（C 层）──
+# 不是阈值指标，是把小红书互动映射进事件阶梯的口径约定。
+# 折算强度：收藏权重 > 点赞（收藏 =「以后要用」，更接近需求信号）。
+xhs_signal_mapping:
+  tier: C
+  src: "经验值，需自测"
+  note: "经验基线，以自测为准"
+  label: "小红书信号折算约定"
+  rules:
+    - "收藏权重 > 点赞"
+    - "「求链接 / 在哪买」类评论 ≈ cta_click"
+    - "私信问价 ≈ lead（按 contact_submit 一级计）"
+
+# ── 事件阶梯命名（强度递增）──
+# page_view < cta_click < price_intent < contact_submit < payment_test
+# 判定信号强弱以阶梯位置为准；现有埋点命名不同时做映射，不强改既有埋点。
+event_ladder:
+  order: [page_view, cta_click, price_intent, contact_submit, payment_test]
+  note: "强度递增；本文件既有指标名保留，按 mapping 归级"
+  mapping:
+    email_capture: contact_submit   # 本文件既有指标，≈ contact_submit 一级
+    email_submit: contact_submit
+    lead: contact_submit
+    payment_any: payment_test
+    payment_rate: payment_test

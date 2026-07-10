@@ -3,7 +3,7 @@ name: lumilab-hypothesis-ledger
 description: |
   Atomic hypothesis ledger for Lumi Lab. Track startup hypotheses as YAML facts with supersede history, confidence scoring, test methods, and verification counts. Generates HTML diff view when hypothesis evolves. Use when user wants to add/update/supersede/list hypotheses, when Research Agent finds evidence that contradicts a hypothesis, when Review Agent runs weekly retro, or when ven­ture decision needs traceable history.
   关键词：假设 / 假设管理 / hypothesis / ledger / 创业假设 / supersede / 复盘 / 验证 / Mom Test / lean startup / atomic fact
-version: 1.5.0
+version: 1.6.0
 metadata:
   hermes:
     tags: [hypothesis, atomic-fact, supersede, lean-startup]
@@ -55,13 +55,20 @@ compatibility: "Claude Code, OpenClaw 2026.4.25+, Hermes Agent v0.13.0+, Cursor,
 - id: h-001                    # h-NNN 递增编号，永不复用
   fact: "[一句话陈述，可证伪]"
   category: assumption          # assumption | observation | decision | preference
+  type: value                   # value（用户要不要）| growth（用户来不来）
+  kill_condition: "若 48h 内评论提及率 < 10% → 放弃模板方向，转访谈重挖痛点"
   confidence: medium            # high | medium | low
   test_method: "[具体测试方法]"
   test_status: pending          # pending | running | passed | failed
+  validation_level:
+    method: fake_door           # fake_door | concierge | wizard_of_oz | smoke_test | interview | desk_research
+    cost: "¥0 / 2 天"
+    alternative_cost: "直接开发 ≈ 3 个月"
   evidence:                     # Research / 用户回收数据写入
     - source: "URL or file path"
       excerpt: "关键引文"
       timestamp: "ISO-8601"
+      source_tag: user_input    # 见「证据来源标签」枚举
   status: active                # active | superseded
   superseded_by: null           # 指向新 fact 的 id
   superseded_reason: null
@@ -73,6 +80,61 @@ compatibility: "Claude Code, OpenClaw 2026.4.25+, Hermes Agent v0.13.0+, Cursor,
   verification_count: 0         # ≥3 升格到 resources/proven-hooks
 ```
 
+### 假设分型（type）
+
+每条假设标 `type: value | growth`：
+
+- **value（价值假设）**：用户要不要——痛点真实、愿意付钱、留得下来
+- **growth（增长假设）**：用户来不来——渠道能触达、成本可承受、口碑会扩散
+
+**原则：价值假设与增长假设并行验证，不排队。** 不要「先验证完 value 再想 growth」——渠道假设错了，价值验证的样本本身就是偏的。每个 venture 的 active 假设里两类都要有。
+
+### Kill Condition（可放弃条件）
+
+每条假设写一句 `kill_condition`：
+
+```yaml
+kill_condition: "若此假设不成立 → 具体后果 + 转向动作"
+```
+
+- 新增假设**必填**；造 landing 前，每条 P0 假设都应有
+- 格式：触发阈值 → 后果 → 转向动作，一句话写完
+- ❌ 「如果不行就再看看」→ ✅ 「若 landing 7 天转化 < 2% → 定价假设不成立，转 concierge 手动交付验证付费意愿」
+
+### 验证级别与成本对比（validation_level）
+
+```yaml
+validation_level:
+  method: fake_door | concierge | wizard_of_oz | smoke_test | interview | desk_research
+  cost: "¥0 / 2 天"
+  alternative_cost: "直接开发 ≈ 3 个月"
+```
+
+用途：让「先验证再开发」的成本差在报告里可见。周复盘和 Studio 报告直接引用 `cost` vs `alternative_cost`，用户一眼看到这条假设省了多少开发成本。
+
+### 证据来源标签（source_tag）
+
+`evidence[]` 每条证据带 `source_tag`，枚举：
+
+`user_input` / `api_tavily` / `api_tikhub` / `api_dataforseo` / `manual_research` / `landing_signal` / `payment_signal` / `social_signal` / `estimated_not_exact`
+
+**规则：`estimated_not_exact` 的证据不得驱动状态升级为「已支持」**（不能作为 `test_status: passed` 或 confidence 升级的依据）。估算数据只能提示方向，升级必须有实测来源。
+
+### 状态更新纪律
+
+每次状态 / 置信变更必须带两个字段：
+
+```yaml
+confidence_delta: +1            # -2..+2 整数
+changed_reason: "landing 首周 5 单付费，超过 3 单阈值"
+```
+
+无 `confidence_delta` + `changed_reason` 的状态变更视为无效写入。沿用现有 supersede 机制不变。
+
+### 向后兼容
+
+旧 `hypotheses.yaml` 缺以上新字段 → **读取照常，不报错**。首次被任何 skill 更新该条目时：补 `type`（默认 `value`），并提示用户补 `kill_condition`。其余新字段按需补齐，不做批量迁移。
+
 ## 核心操作
 
 ### Op 1: Add（新增假设）
@@ -82,9 +144,15 @@ compatibility: "Claude Code, OpenClaw 2026.4.25+, Hermes Agent v0.13.0+, Cursor,
 - id: h-{next_id}
   fact: "[fact]"
   category: assumption
+  type: {value|growth}              # 价值/增长分型，必填
+  kill_condition: "[不成立 → 后果 + 转向动作]"   # 必填
   confidence: {high|medium|low}     # 初始用户主观判断
   test_method: "[基于方法论 - Mom Test / A/B / 调研]"
   test_status: pending
+  validation_level:
+    method: {fake_door|concierge|wizard_of_oz|smoke_test|interview|desk_research}
+    cost: "[验证成本]"
+    alternative_cost: "[直接开发的成本]"
   created_at: now()
   status: active
   # ... 其他字段默认
@@ -94,6 +162,8 @@ compatibility: "Claude Code, OpenClaw 2026.4.25+, Hermes Agent v0.13.0+, Cursor,
 - `fact` 必须可证伪（不能是「我觉得用户会喜欢」，要是「48h 内 ≥5 条评论提及 X 痛点」）
 - 一个 venture 通常 3-5 条 active 假设，超过 10 条说明 idea 没收敛
 - `test_method` 必须具体（含触达样本数 / 阈值）
+- `type` 两类都要覆盖：value 与 growth 并行验证，不排队
+- 新假设 `kill_condition` 必填；造 landing 前每条 P0 假设都要有
 
 ### Op 2: Add Evidence（追加证据）
 
@@ -104,9 +174,10 @@ evidence:
   - source: "research/xhs_findings.md"
     excerpt: "8/12 评论说「质量 > 数量」"
     timestamp: "2026-05-13T14:30:00Z"
+    source_tag: manual_research
 ```
 
-证据足够后，可以更新 `confidence`。
+证据足够后，可以更新 `confidence`（变更时带 `confidence_delta` + `changed_reason`）。`source_tag: estimated_not_exact` 的证据不算「足够」。
 
 ### Op 3: Verify（验证通过）
 
@@ -114,7 +185,11 @@ evidence:
 test_status: passed
 verification_count: {previous + 1}
 confidence: high                  # 通过即升级
+confidence_delta: +2              # 必填，-2..+2 整数
+changed_reason: "[一句话：哪条证据触发了升级]"
 ```
+
+**前提**：驱动 passed 的证据 `source_tag` 不得是 `estimated_not_exact`。
 
 **当 verification_count ≥ 3**：
 - 自动 surface 给用户："这条假设已被 3 次独立验证，建议升格到 resources/proven-hooks/"
@@ -193,6 +268,7 @@ confidence: high                  # 通过即升级
 - 旧版灰度处理 + 删除线 + `opacity: 0.6`
 - 新版主色 + 强调
 - 中间 `→` 箭头 SVG
+- 渲染分型徽章（价值/增长）与 Kill Condition 行，视觉沿用 venture 的 design_direction token，不引入新配色
 
 实现见 `lumilab-studio/templates/hypothesis-diff.html.tpl`。
 
@@ -220,6 +296,9 @@ confidence: high                  # 通过即升级
 ```
 ✓ fact 是否可证伪（含具体阈值 / 触达数）
 ✓ test_method 是否具体可执行
+✓ 新假设带 type（value/growth）与 kill_condition
+✓ 状态/置信变更带 confidence_delta（-2..+2）+ changed_reason
+✓ estimated_not_exact 证据没有驱动「已支持」升级
 ✓ supersede 时旧 fact 没被删（status 变 superseded 即可）
 ✓ supersede 时同步写了 decisions.yaml
 ✓ supersede 时触发了 diff view 重渲染
@@ -338,6 +417,7 @@ Lumi Lab 的差异：每个假设是带 `id` / `confidence` / `evidence` / super
 
 ## Changelog
 
+- **1.6.0** — 假设分型（`type: value|growth`，并行验证不排队）、`kill_condition` 必填、`validation_level` 成本对比、evidence `source_tag` 枚举（estimated_not_exact 不得驱动升级）、状态更新纪律（`confidence_delta` + `changed_reason`）、向后兼容读取旧账本。
 - **1.0.0-rc1** — 加 `## Changelog` / `scripts/package.json` / `校验字段:` 显式 schema 声明；Dependencies 表补单次调用成本列。
 - **0.3.0** — `validate-output.ts` 加 supersede 链孤儿检测 + 回环检测；`anti-slop-lint.ts` 接入。
 - **0.2.0** — 补 `## 分支决策` if-then 表、`status: superseded` 软删除、Studio diff view。
